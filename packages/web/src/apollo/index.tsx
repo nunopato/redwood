@@ -4,11 +4,14 @@ import {
   ApolloClient,
   ApolloLink,
   InMemoryCache,
-  useQuery,
+  useSubscription,
   useMutation,
   createHttpLink,
+  split,
 } from '@apollo/client'
 import { setContext } from '@apollo/client/link/context'
+import { WebSocketLink } from '@apollo/client/link/ws'
+import { getMainDefinition } from '@apollo/client/utilities'
 
 import { AuthContextInterface, useAuth } from '@redwoodjs/auth'
 
@@ -59,10 +62,36 @@ const ApolloProviderWithFetchConfig: React.FunctionComponent<{
 
   const httpLink = createHttpLink({ uri })
 
+  const wsUri = uri.startsWith('https')
+    ? uri.replace(/^https/, 'wss')
+    : uri.replace(/^http/, 'ws')
+
+  const wsLink = new WebSocketLink({
+    // uri: 'ws://hasura-c5bf08c5.nhost.app/v1/graphql',
+    uri: wsUri,
+    options: {
+      reconnect: true,
+    },
+  })
+
+  const splitLink = split(
+    ({ query }) => {
+      const definition = getMainDefinition(query)
+      return (
+        definition.kind === 'OperationDefinition' &&
+        definition.operation === 'subscription'
+      )
+    },
+    // wsLink,
+    wsLink,
+    httpLink
+  )
+
   const client = new ApolloClient({
     cache: new InMemoryCache(),
     ...config,
-    link: ApolloLink.from([withToken, authMiddleware.concat(httpLink)]),
+    link: ApolloLink.from([withToken, authMiddleware.concat(splitLink)]),
+    // link: splitLink,
   })
 
   return <ApolloProvider client={client}>{children}</ApolloProvider>
@@ -75,7 +104,10 @@ export const RedwoodApolloProvider: React.FunctionComponent<{
   return (
     <FetchConfigProvider useAuth={useAuth}>
       <ApolloProviderWithFetchConfig config={graphQLClientConfig}>
-        <GraphQLHooksProvider useQuery={useQuery} useMutation={useMutation}>
+        <GraphQLHooksProvider
+          useSubscription={useSubscription}
+          useMutation={useMutation}
+        >
           <FlashProvider>{children}</FlashProvider>
         </GraphQLHooksProvider>
       </ApolloProviderWithFetchConfig>

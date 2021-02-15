@@ -1,12 +1,13 @@
 import type { DocumentNode } from 'graphql'
 
-import { useQuery, OperationResult } from './GraphQLHooksProvider'
+import { useSubscription, OperationResult } from './GraphQLHooksProvider'
+// import { useQuery, OperationResult } from './GraphQLHooksProvider'
 
-const Query: React.FunctionComponent<{
-  query: DocumentNode
+const Subscription: React.FunctionComponent<{
+  subscription: DocumentNode
   children: (result: OperationResult) => React.ReactElement
-}> = ({ children, query, ...rest }) => {
-  const result = useQuery(query, rest)
+}> = ({ children, subscription, ...rest }) => {
+  const result = useSubscription(subscription, rest)
   return children && result ? children(result) : null
 }
 
@@ -25,9 +26,10 @@ export type CellSuccessStateComponent =
   | DataObject
 
 export interface WithCellProps {
-  beforeQuery?: <TProps>(props: TProps) => { variables: TProps }
-  QUERY: DocumentNode | ((variables: Record<string, unknown>) => DocumentNode)
-  afterQuery?: (data: DataObject) => DataObject
+  beforeSubscription?: <TProps>(props: TProps) => { variables: TProps }
+  // @ts-expect-error We do not know, and even really care, what they are here.
+  SUBSCRIPTION: DocumentNode | (({ variables: unknown }) => DocumentNode)
+  afterSubscription?: (data: DataObject) => DataObject
   Loading?: React.FC<CellLoadingEmptyStateComponent>
   Failure?: React.FC<CellFailureStateComponent>
   Empty?: React.FC<CellLoadingEmptyStateComponent>
@@ -40,9 +42,9 @@ export interface WithCellProps {
  * the required params of `withCell` it will be automatically wrapped in this
  * HOC via a babel-plugin.
  *
- * @param {string} QUERY - The graphQL syntax tree to execute
- * @param {function=} beforeQuery - Prepare the variables and options for the query
- * @param {function=} afterQuery - Sanitize the data return from graphQL
+ * @param {string} SUBSCRIPTION - The graphQL syntax tree to execute
+ * @param {function=} beforeSubscription - Prepare the variables and options for the query
+ * @param {function=} afterSubscription - Sanitize the data return from graphQL
  * @param {Component=} Loading - Loading, render this component
  * @param {Component=} Empty - Loading, render this component
  * @param {Component=} Failure - Something went wrong, render this component
@@ -70,13 +72,13 @@ export interface WithCellProps {
  * }
  */
 export const withCell = ({
-  beforeQuery = (props) => ({
+  beforeSubscription = (props) => ({
     variables: props,
     fetchPolicy: 'cache-and-network',
     nextFetchPolicy: 'cache-first',
   }),
-  QUERY,
-  afterQuery = (data) => ({ ...data }),
+  SUBSCRIPTION,
+  afterSubscription = (data) => ({ ...data }),
   Loading = () => <>Loading...</>,
   Failure,
   Empty,
@@ -99,41 +101,42 @@ export const withCell = ({
     return isDataNull(data) || isDataEmptyArray(data)
   }
 
-  return (props: Record<string, unknown>) => {
-    const {
-      children, // eslint-disable-line @typescript-eslint/no-unused-vars
-      ...variables
-    } = props
-
-    return (
-      <Query
-        query={
-          typeof QUERY === 'function' ? QUERY(beforeQuery(variables)) : QUERY
-        }
-        {...beforeQuery(variables)}
-      >
-        {({ error, loading, data, ...queryRest }) => {
-          if (error) {
-            if (Failure) {
-              return <Failure error={error} {...queryRest} {...props} />
-            } else {
-              throw error
-            }
-          } else if (loading) {
-            return <Loading {...queryRest} {...props} />
-          } else if (data) {
-            if (typeof Empty !== 'undefined' && isEmpty(data)) {
-              return <Empty {...queryRest} {...props} />
-            } else {
-              return <Success {...afterQuery(data)} {...queryRest} {...props} />
-            }
+  return (props: Record<string, unknown>) => (
+    <Subscription
+      subscription={
+        typeof SUBSCRIPTION === 'function'
+          ? SUBSCRIPTION(beforeSubscription(props))
+          : SUBSCRIPTION
+      }
+      {...beforeSubscription(props)}
+    >
+      {({ error, loading, data, ...subscriptionRest }) => {
+        if (error) {
+          if (Failure) {
+            return <Failure error={error} {...subscriptionRest} {...props} />
           } else {
-            throw new Error(
-              'Cannot render cell: GraphQL success but `data` is null'
+            throw error
+          }
+        } else if (loading) {
+          return <Loading {...subscriptionRest} {...props} />
+        } else if (data) {
+          if (typeof Empty !== 'undefined' && isEmpty(data)) {
+            return <Empty {...subscriptionRest} {...props} />
+          } else {
+            return (
+              <Success
+                {...afterSubscription(data)}
+                {...subscriptionRest}
+                {...props}
+              />
             )
           }
-        }}
-      </Query>
-    )
-  }
+        } else {
+          throw new Error(
+            'Cannot render cell: GraphQL success but `data` is null'
+          )
+        }
+      }}
+    </Subscription>
+  )
 }

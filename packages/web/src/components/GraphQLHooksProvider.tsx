@@ -15,8 +15,8 @@ export type MutationOperationResult<TData = any> = [
 ]
 
 export interface GraphQLHooks {
-  useQuery: (
-    query: DocumentNode,
+  useSubscription: (
+    subscription: DocumentNode,
     options?: GraphQLHookOptions
   ) => OperationResult
   useMutation: (
@@ -25,9 +25,9 @@ export interface GraphQLHooks {
   ) => MutationOperationResult
 }
 export const GraphQLHooksContext = React.createContext<GraphQLHooks>({
-  useQuery: () => {
+  useSubscription: () => {
     throw new Error(
-      'You must register a useQuery hook via the `GraphQLHooksProvider`'
+      'You must register a useSubscription hook via the `GraphQLHooksProvider`'
     )
   },
   useMutation: () => {
@@ -45,19 +45,19 @@ export const GraphQLHooksContext = React.createContext<GraphQLHooks>({
  * @todo Let the user pass in the additional type for options.
  */
 export const GraphQLHooksProvider: React.FunctionComponent<{
-  useQuery: (
-    query: DocumentNode,
+  useSubscription: (
+    subscription: DocumentNode,
     options?: GraphQLHookOptions
   ) => OperationResult
   useMutation: (
     mutation: DocumentNode,
     options?: GraphQLHookOptions
   ) => MutationOperationResult
-}> = ({ useQuery, useMutation, children }) => {
+}> = ({ useSubscription, useMutation, children }) => {
   return (
     <GraphQLHooksContext.Provider
       value={{
-        useQuery,
+        useSubscription,
         useMutation,
       }}
     >
@@ -66,11 +66,14 @@ export const GraphQLHooksProvider: React.FunctionComponent<{
   )
 }
 
-export function useQuery<TData = any>(
-  query: DocumentNode,
+export function useSubscription<TData = any>(
+  subscription: DocumentNode,
   options?: GraphQLHookOptions
 ): OperationResult<TData> {
-  return React.useContext(GraphQLHooksContext).useQuery(query, options)
+  return React.useContext(GraphQLHooksContext).useSubscription(
+    subscription,
+    options
+  )
 }
 
 export function useMutation<TData = any>(
