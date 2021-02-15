@@ -57,6 +57,7 @@ const ApolloProviderWithFetchConfig: React.FunctionComponent<{
         ...authHeaders,
       },
     }))
+
     return forward(operation)
   })
 
@@ -67,10 +68,21 @@ const ApolloProviderWithFetchConfig: React.FunctionComponent<{
     : uri.replace(/^http/, 'ws')
 
   const wsLink = new WebSocketLink({
-    // uri: 'ws://hasura-c5bf08c5.nhost.app/v1/graphql',
     uri: wsUri,
     options: {
       reconnect: true,
+      lazy: true,
+      connectionParams: async () => {
+        const token = await getToken()
+        return token
+          ? {
+              headers: {
+                'auth-provider': authProviderType,
+                authorization: `Bearer ${token}`,
+              },
+            }
+          : {}
+      },
     },
   })
 
@@ -82,7 +94,6 @@ const ApolloProviderWithFetchConfig: React.FunctionComponent<{
         definition.operation === 'subscription'
       )
     },
-    // wsLink,
     wsLink,
     httpLink
   )
@@ -91,7 +102,6 @@ const ApolloProviderWithFetchConfig: React.FunctionComponent<{
     cache: new InMemoryCache(),
     ...config,
     link: ApolloLink.from([withToken, authMiddleware.concat(splitLink)]),
-    // link: splitLink,
   })
 
   return <ApolloProvider client={client}>{children}</ApolloProvider>
